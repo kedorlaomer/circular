@@ -1,0 +1,30 @@
+# Circular
+
+This program is to be applied in the following (very narrow) use
+case:
+
+*   a `source` generates (likely textual) data
+-   of which the younger parts are more interesting (as in a log
+    file)
+*   storing everything is infeasible
+
+In this case, the `source` should be invoked as
+
+    source | circular& pid=$!
+
+When later, some of the `source`'s data is required, ask for it
+via
+
+    kill -USR1 $pid
+
+Then `circular` outputs a suffix of the `source`'s data.
+
+Since `circular` uses compression, you will need `libz.a`. This
+repository is set up such that `circular` is being linked
+statically. If your environment doesn't support this (looking at
+you, glibc), then you're out of luck.
+
+## About the implementation
+
+Internally, `circular` stores a compressed circular buffer with
+the sources output. It uses `zlib`.
