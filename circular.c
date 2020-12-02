@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     compress_input.avail_out = CIRCULAR_BUFFER_SIZE;
 
     decompress_buf.next_in = buf;
-    decompress_buf.avail_in = CIRCULAR_BUFFER_SIZE; /* not yet */
+    decompress_buf.avail_in = 0;
     decompress_buf.next_out = scratch;
     decompress_buf.avail_out = BUFSIZ;
 
@@ -78,13 +78,16 @@ int main(int argc, char **argv) {
         fd_set fds;
         int fileno_stdin = fileno(stdin);
         fd_set empty;
+        struct timeval timeout;
+        timeout.tv_sec = 0xffff; /* wait long */
+        timeout.tv_usec = 0xffff;
         FD_ZERO(&fds);
         FD_ZERO(&empty);
 
         FD_SET(fileno_stdin, &fds);
 
         /* wait forever for stdin or a signal */
-        select(fileno_stdin+1, &fds, &empty, &empty, NULL);
+        select(fileno_stdin+1, &fds, &empty, &empty, &timeout);
 
         if (received_sigusr1) {
             signal(SIGUSR1, handle_sigusr1); /* may need to set again */
@@ -108,7 +111,9 @@ int main(int argc, char **argv) {
                         if (received_sigusr1) {
                             signal(SIGUSR1, handle_sigusr1); /* may need to set again */
                             received_sigusr1 = 0;
-                            dump_zstream(&decompress_buf, buf, compress_input.next_out-buf);
+                            /* if decompress_buf was never read from, its field avail_in is not reliable */
+                            if (!decompress_buf.total_in) decompress_buf.avail_in = compress_input.next_out-buf;
+                            dump_zstream(&decompress_buf, buf, decompress_buf.total_in? compress_input.next_out-buf : 0);
                         }
 
                         decompress_buf.next_out = scratch;
@@ -137,7 +142,6 @@ int main(int argc, char **argv) {
 
 void handle_sigusr1(int ignore) {
     received_sigusr1 = 1;
-    puts("Handling USR1.");
 }
 
 void dump_zstream(z_stream *input, unsigned char *buf, size_t space_left) {
@@ -152,7 +156,7 @@ void dump_zstream(z_stream *input, unsigned char *buf, size_t space_left) {
         copy.avail_out = BUFSIZ;
         copy.next_out = scratch;
         inflate(&copy, Z_SYNC_FLUSH);
-        write(fileno_stdout, scratch, BUFSIZ);
+        write(fileno_stdout, scratch, BUFSIZ-copy.avail_out);
     }
 
     /* then, decompress from beginning of `buf` */
@@ -163,7 +167,7 @@ void dump_zstream(z_stream *input, unsigned char *buf, size_t space_left) {
         copy.avail_out = BUFSIZ;
         copy.next_out = scratch;
         inflate(&copy, Z_SYNC_FLUSH);
-        write(fileno_stdout, input, BUFSIZ);
+        write(fileno_stdout, scratch, BUFSIZ-copy.avail_out);
     }
 
     inflateEnd(&copy);
