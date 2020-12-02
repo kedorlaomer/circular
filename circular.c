@@ -78,16 +78,13 @@ int main(int argc, char **argv) {
         fd_set fds;
         int fileno_stdin = fileno(stdin);
         fd_set empty;
-        struct timeval timeout;
-        timeout.tv_sec = 0xffff; /* wait long */
-        timeout.tv_usec = 0xffff;
         FD_ZERO(&fds);
         FD_ZERO(&empty);
 
         FD_SET(fileno_stdin, &fds);
 
         /* wait forever for stdin or a signal */
-        select(fileno_stdin+1, &fds, &empty, &empty, &timeout);
+        select(fileno_stdin+1, &fds, &empty, &empty, NULL);
 
         if (received_sigusr1) {
             signal(SIGUSR1, handle_sigusr1); /* may need to set again */
@@ -100,6 +97,7 @@ int main(int argc, char **argv) {
             if (read_bytes == -1) {
                 perror("circular: read from stdin");
             } else {
+                if (!read_bytes) sleep(10);
                 compress_input.next_in = input;
                 compress_input.avail_in = (uInt) read_bytes;
 
